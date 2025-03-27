@@ -1,0 +1,5 @@
+process_cpu_seconds_total 0.47
+process_max_fds 1.048576e+06
+prometheus_build_info{branch="release-2.54",goarch="amd64",goos="linux",goversion="go1.23.4",revision="c5e015d29534f06bd1d238c64a06b7ac41abdd7f",tags="netgo,builtinassets,stringlabels",version="2.54.1"} 1
+prometheus_engine_query_log_enabled 0
+prometheus_http_requests_total{code="200",handler="/"} 0
