@@ -1,11 +1,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
-	"strconv"
-	"strings"
 	"time"
+
+	"github.com/pomyslowynick/scratcheus/lexer"
+	"github.com/pomyslowynick/scratcheus/storage"
 )
 
 type Metric struct {
@@ -28,85 +31,31 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	parsedScrapeData := parseScrapeData(out)
-	scrape(parsedScrapeData)
+	parseScrapeData(out)
 	time.Sleep(time.Millisecond * 500)
 
 }
 
 func parseScrapeData(scrapeData []byte) {
+	newParser := lexer.NewParser(scrapeData)
+	for {
+		var (
+			et  lexer.Entry
+			err error
+		)
 
+		if et, err = newParser.Next(); err != nil {
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+			break
+		}
+
+		fmt.Println(et)
+	}
 }
 
-func scrape(scrapeData []byte) {
-
-	allMetrics := make(map[string]Metric, 0)
-	outAsStr := string(scrapeData)
-
-	for _, item := range strings.Split(outAsStr, "\n") {
-		if item == "" {
-			continue
-		}
-
-		splitMetric := strings.Split(item, " ")
-
-		nameAndLabels := splitMetric[0]
-		value := splitMetric[1]
-		convertedValue, err := strconv.ParseFloat(value, 64)
-
-		if err != nil {
-			panic("Couldn't convert string to Float")
-		}
-
-		splitNameAndLabels := strings.Split(nameAndLabels, "{")
-		metricName := splitNameAndLabels[0]
-
-		if _, ok := allMetrics[metricName]; !ok {
-			// labels
-			parsedLabels := make(map[string]string)
-			if len(splitNameAndLabels) > 1 {
-				for _, label := range strings.Split(splitNameAndLabels[1], ",") {
-					splitLabel := strings.Split(label, "=")
-					labelValue := strings.Join(splitLabel[1:], "")
-					parsedLabels[splitLabel[0]] = labelValue
-
-				}
-
-			}
-
-			// values
-			valuesArray := []float64{convertedValue}
-			newM := Metric{
-				name:       metricName,
-				timeseries: make(map[string]*Timeseries),
-			}
-			newM.timeseries[nameAndLabels] = &Timeseries{
-				labels: parsedLabels,
-				values: valuesArray,
-			}
-			allMetrics[metricName] = newM
-		} else {
-			if val, ok := allMetrics[metricName].timeseries[nameAndLabels]; ok {
-				val.appendValue(convertedValue)
-			} else {
-				parsedLabels := make(map[string]string)
-				if len(splitNameAndLabels) > 1 {
-					for _, label := range strings.Split(splitNameAndLabels[1], ",") {
-						splitLabel := strings.Split(label, "=")
-						labelValue := strings.Join(splitLabel[1:], "")
-						parsedLabels[splitLabel[0]] = labelValue
-					}
-
-				}
-
-				// values
-				valuesArray := []float64{convertedValue}
-				allMetrics[metricName].timeseries[nameAndLabels] = &Timeseries{
-					labels: parsedLabels,
-					values: valuesArray,
-				}
-			}
-		}
-	}
-	fmt.Println(allMetrics)
+func appendSeriesData() {
+	a := storage.NewXorAppender()
+	a.Append(time.Now().Unix(), 12.1)
 }
