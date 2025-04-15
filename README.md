@@ -20,6 +20,6 @@ I'll write a blog post about each part and try to make it into a series tutorial
 
 Run with `go run main.go` :)
 
-### CHANGELOG
-2nd of April 
-Working through the `scrapeManager` code and the flow involved in writing a sample to a `memSeries`.
+### tests/ directory
+
+It's not real unit tests, but free recall exercise writing functions which I explore from memory, to deepen my understanding.

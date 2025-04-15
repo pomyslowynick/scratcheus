@@ -1,10 +1,31 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"strconv"
 	"strings"
 )
+
+type Metric struct {
+	name       string
+	timeseries map[string]*Timeseries
+}
+
+type Timeseries struct {
+	labels map[string]string
+	values []float64
+}
+
+func (t *Timeseries) appendValue(value float64) {
+	t.values = append(t.values, value)
+}
+
+func main() {
+	b := []byte{1, 1, 5, 4, 300}
+	fmt.Println(binary.BigEndian.Uint16(b))
+	fmt.Println(uint16(b[0]) << 8)
+}
 
 // My naive attempt at parsing scrape data, keeping it to include it in the tutorial as an anti-example
 func scrape(scrapeData []byte) {

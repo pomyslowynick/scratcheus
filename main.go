@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/pomyslowynick/scratcheus/lexer"
-	"github.com/pomyslowynick/scratcheus/storage"
 )
 
 type Metric struct {
@@ -31,8 +29,6 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	parseScrapeData(out)
-	time.Sleep(time.Millisecond * 500)
 
 }
 
@@ -40,22 +36,15 @@ func parseScrapeData(scrapeData []byte) {
 	newParser := lexer.NewParser(scrapeData)
 	for {
 		var (
-			et  lexer.Entry
+			// et  lexer.Entry
 			err error
 		)
 
-		if et, err = newParser.Next(); err != nil {
+		if _, err = newParser.Next(); err != nil {
 			if errors.Is(err, io.EOF) {
 				err = nil
 			}
 			break
 		}
-
-		fmt.Println(et)
 	}
-}
-
-func appendSeriesData() {
-	a := storage.NewXorAppender()
-	a.Append(time.Now().Unix(), 12.1)
 }
