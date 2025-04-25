@@ -1,0 +1,118 @@
+// Copyright (c) 2015,2016 Damian Gryski <damian@gryski.com>
+// All rights reserved.
+
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+
+// * Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.
+//
+// * Redistributions in binary form must reproduce the above copyright notice,
+// this list of conditions and the following disclaimer in the documentation
+// and/or other materials provided with the distribution.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+package tsdb
+
+import (
+	"encoding/binary"
+	"math"
+	"math/bits"
+)
+
+type Chunk struct {
+	b bstream
+}
+
+type xorAppender struct {
+	b              bstream
+	t              uint64
+	v              float64
+	leading_zeros  int
+	trailing_zeros int
+	ts_delta       uint64
+}
+
+func (x *xorAppender) Append(t uint64, v float64) {
+	num := binary.BigEndian.Uint16(x.b.stream)
+
+	switch num {
+	case 0:
+		x.b.writeBits(t, 64)
+		x.b.writeBits(math.Float64bits(v), 64)
+	case 1:
+		ts_delta := t - x.t
+		x.b.writeBits(ts_delta, 64)
+		x.writeVDelta(v)
+	default:
+		ts_delta := t - x.t
+		dod := ts_delta - x.ts_delta
+		x.writeVDelta(v)
+
+		if dod == 0 {
+			x.b.writeBit(zero)
+		} else if bitsRange(dod, 7) {
+			x.b.writeBits(0b10, 2)
+			x.b.writeBits(dod, 6)
+		} else if bitsRange(dod, 9) {
+			x.b.writeBits(0b110, 3)
+			x.b.writeBits(dod, 5)
+		} else if bitsRange(dod, 12) {
+			x.b.writeBits(0b1110, 4)
+			x.b.writeBits(dod, 5)
+		} else {
+			x.b.writeBits(0b1111, 4)
+			x.b.writeBits(dod, 32)
+		}
+	}
+
+	num_plus_one := num + 1
+	x.b.stream[0] = byte(num_plus_one >> 8)
+	x.b.stream[1] = byte(num_plus_one)
+
+	x.t = t
+	x.v = v
+
+}
+
+func (x *xorAppender) writeVDelta(v float64) {
+	delta := math.Float64bits(v) ^ math.Float64bits(x.v)
+	if delta == 0 {
+		x.b.writeBit(zero)
+		return
+	}
+
+	x.b.writeBit(one)
+
+	leading_zeros := bits.LeadingZeros64(delta)
+	trailing_zeros := bits.TrailingZeros64(delta)
+
+	if leading_zeros == x.leading_zeros && trailing_zeros == x.trailing_zeros {
+		x.b.writeBit(zero)
+		x.b.writeBits(delta, 64-(leading_zeros+trailing_zeros))
+		return
+	}
+
+	x.b.writeBit(one)
+	x.b.writeBits(uint64(leading_zeros), 5)
+	x.b.writeBits(uint64(64-(leading_zeros+trailing_zeros)), 6)
+	x.b.writeBits(delta>>trailing_zeros, 64-(leading_zeros+trailing_zeros))
+
+}
+
+func bitsRange(v uint64, nbits int) bool {
+	return 1<<(nbits-1) >= v && -((1<<(nbits-1))-1) <= v
+}
+
+func NewAppender() xorAppender {
+	return xorAppender{b: bstream{stream: make([]byte, 2, 2)}}
+}
