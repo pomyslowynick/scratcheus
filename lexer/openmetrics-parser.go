@@ -9,6 +9,8 @@ import (
 	"strings"
 	"unicode/utf8"
 	"unsafe"
+
+	"github.com/pomyslowynick/scratcheus/labels"
 )
 
 type MetricType string
@@ -559,4 +561,30 @@ func (p *OpenMetricsParser) Series() ([]byte, *int64, float64) {
 		return p.series, &ts, p.val
 	}
 	return p.series, nil, p.val
+}
+
+func (p *OpenMetricsParser) Labels() (string, labels.Labels) {
+
+	labelsCount := len(p.offsets) / 2
+
+	allLabels := make(labels.Labels, 0, labelsCount)
+
+	metricName := string(p.l.b[p.offsets[0]:p.offsets[1]])
+	allLabels = append(allLabels, labels.Label{
+		Name:  "__name__",
+		Value: metricName,
+	})
+
+	if len(p.offsets) > 2 {
+		for i := 2; len(p.offsets)-2 > i; i += 2 {
+			labelName := string(p.l.b[p.offsets[i]:p.offsets[i+1]])
+			labelValue := string(p.l.b[p.offsets[i+2]:p.offsets[i+3]])
+			allLabels = append(allLabels, labels.Label{
+				Name:  labelName,
+				Value: labelValue,
+			})
+
+		}
+	}
+	return metricName, allLabels
 }
