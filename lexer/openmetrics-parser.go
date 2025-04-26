@@ -576,7 +576,7 @@ func (p *OpenMetricsParser) Labels() (string, labels.Labels) {
 	})
 
 	if len(p.offsets) > 2 {
-		for i := 2; len(p.offsets)-2 > i; i += 2 {
+		for i := 2; len(p.offsets)-2 > i; i += 4 {
 			labelName := string(p.l.b[p.offsets[i]:p.offsets[i+1]])
 			labelValue := string(p.l.b[p.offsets[i+2]:p.offsets[i+3]])
 			allLabels = append(allLabels, labels.Label{

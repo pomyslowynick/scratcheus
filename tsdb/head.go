@@ -24,14 +24,13 @@ func (m *memSeries) Append(t uint64, v float64) {
 
 type Head struct {
 	lastSeriesRef uint64
-	series        map[uint64]memSeries
-	seriesHashes  map[string]uint64
+	series        map[uint64]*memSeries
 }
 
 func NewHead() Head {
 	return Head{
 		lastSeriesRef: 1,
-		series:        make(map[uint64]memSeries),
+		series:        make(map[uint64]*memSeries),
 	}
 }
 
@@ -54,10 +53,10 @@ func (h *Head) createOrGetMemSeries(l labels.Labels) *memSeries {
 	}
 
 	if v, ok := h.series[id]; ok {
-		return &v
+		return v
 	} else {
 		newSeries := newMemSeries(l)
-		h.series[id] = newSeries
+		h.series[id] = &newSeries
 		return &newSeries
 	}
 }
