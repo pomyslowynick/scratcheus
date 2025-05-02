@@ -12,6 +12,7 @@ The plan is to have:
 - Xor & Varint encoding
 - Rule evaluation 
 - Promql query engine
+- Minimal TSDB with WAL, maybe WBL
 
 It's a lot of stuff!
 Each of the components will be created by diving into Prometheus code, copying relevant parts of it and dumbing it down.

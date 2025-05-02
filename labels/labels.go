@@ -1,10 +1,12 @@
 package labels
 
+import "hash/fnv"
+
 type Labels []Label
 
 type Label struct {
-	Value string
 	Name  string
+	Value string
 }
 
 type Builder struct {
@@ -26,4 +28,17 @@ func (l *Label) Bytes() []byte {
 		labelsAsBytes = append(labelsAsBytes, b)
 	}
 	return labelsAsBytes
+}
+
+func (l Labels) HashLabels() (uint64, error) {
+	newHash := fnv.New64()
+
+	for _, v := range l {
+		_, err := newHash.Write(v.Bytes())
+		if err != nil {
+			return 0, err
+		}
+
+	}
+	return newHash.Sum64(), nil
 }

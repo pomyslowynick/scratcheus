@@ -52,27 +52,30 @@ func (x *xorAppender) Append(t uint64, v float64) {
 	case 1:
 		ts_delta := t - x.t
 		x.b.writeBits(ts_delta, 64)
+		x.ts_delta = ts_delta
+
 		x.writeVDelta(v)
 	default:
 		ts_delta := t - x.t
-		dod := ts_delta - x.ts_delta
-		x.writeVDelta(v)
-
-		if dod == 0 {
+		dod := int64(ts_delta - x.ts_delta)
+		x.ts_delta = ts_delta
+		switch {
+		case dod == 0:
 			x.b.writeBit(zero)
-		} else if bitsRange(dod, 7) {
+		case bitsRange(dod, 7):
 			x.b.writeBits(0b10, 2)
-			x.b.writeBits(dod, 6)
-		} else if bitsRange(dod, 9) {
+			x.b.writeBits(uint64(dod), 6)
+		case bitsRange(dod, 9):
 			x.b.writeBits(0b110, 3)
-			x.b.writeBits(dod, 5)
-		} else if bitsRange(dod, 12) {
+			x.b.writeBits(uint64(dod), 5)
+		case bitsRange(dod, 12):
 			x.b.writeBits(0b1110, 4)
-			x.b.writeBits(dod, 5)
-		} else {
+			x.b.writeBits(uint64(dod), 5)
+		default:
 			x.b.writeBits(0b1111, 4)
-			x.b.writeBits(dod, 32)
+			x.b.writeBits(uint64(dod), 32)
 		}
+		x.writeVDelta(v)
 	}
 
 	num_plus_one := num + 1
@@ -108,8 +111,11 @@ func (x *xorAppender) writeVDelta(v float64) {
 	x.b.writeBits(delta>>trailing_zeros, 64-(leading_zeros+trailing_zeros))
 
 }
+func (x *xorAppender) Series() []byte {
+	return x.b.stream
+}
 
-func bitsRange(v uint64, nbits int) bool {
+func bitsRange(v int64, nbits int) bool {
 	return 1<<(nbits-1) >= v && -((1<<(nbits-1))-1) <= v
 }
 

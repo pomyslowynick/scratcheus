@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	scrapeData, err := os.ReadFile("metrics_five.txt")
+	scrapeData, err := os.ReadFile("./test_files/metrics_five.txt")
 
 	if err != nil {
 		fmt.Println(err)

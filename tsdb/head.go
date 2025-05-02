@@ -1,8 +1,6 @@
 package tsdb
 
 import (
-	"hash/fnv"
-
 	"github.com/pomyslowynick/scratcheus/labels"
 )
 
@@ -34,21 +32,10 @@ func NewHead() Head {
 	}
 }
 
-func (h *Head) hashLabels(l labels.Labels) uint64 {
-	newHash := fnv.New64()
-
-	for _, v := range l {
-		_, _ = newHash.Write(v.Bytes())
-
-	}
-	return newHash.Sum64()
-
-}
-
 func (h *Head) createOrGetMemSeries(l labels.Labels) *memSeries {
-	id := h.hashLabels(l)
+	id, err := l.HashLabels()
 
-	if id == 0 {
+	if err != nil {
 		panic("Should never happen")
 	}
 
@@ -61,8 +48,25 @@ func (h *Head) createOrGetMemSeries(l labels.Labels) *memSeries {
 	}
 }
 
-func (h *Head) Append(labels labels.Labels, t uint64, v float64) {
-	memSeries := h.createOrGetMemSeries(labels)
+func (h *Head) Append(l labels.Labels, t uint64, v float64) {
+	memSeries := h.createOrGetMemSeries(l)
 
 	memSeries.Append(t, v)
+}
+
+func (h *Head) GetMemSeries(l labels.Labels) *memSeries {
+	id, err := l.HashLabels()
+	if err != nil {
+		panic("Should never happen")
+	}
+
+	if v, ok := h.series[id]; ok {
+		return v
+	} else {
+		return nil
+	}
+}
+
+func (m *memSeries) Bytes() []byte {
+	return m.app.Series()
 }
