@@ -16,6 +16,6 @@ I've added a hashing function to get back the series based on it's labels, used 
 Finally I've added some unit tests, I should have been writing those from the start, but it always feels like the least fun part. I should be writing them as I add new functionalities, instead I keep using `main.go` for that which could be instead spent on the tests. I caught few issues when writing those, order of operations in `xor.Append` wasn't correct in one of the cases among others, so it's good to write those. Going forward I'll write a test file for each source file I am adding, or at least try to do so.
 
 - [x] Parser and lexer are there, but they could be simplified, given I don't use a lot of the code in there.
-- [x] Xor encoding is there, there's not `varint` though, will have to take a second pass at that
+- [x] Xor encoding is there, there's no `varint` though, will have to take a second pass at that
 
 Next I will try to have the scraping pools and loops, would be good to get the goroutines cracking too.

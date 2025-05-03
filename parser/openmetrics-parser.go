@@ -1,4 +1,4 @@
-package lexer
+package parser
 
 import (
 	"errors"
@@ -14,6 +14,11 @@ import (
 )
 
 type MetricType string
+
+type ParsedSample struct {
+	Labels labels.Labels
+	Value  float64
+}
 
 const (
 	MetricTypeCounter        = MetricType("counter")
@@ -352,15 +357,6 @@ func yoloString(b []byte) string {
 func (p *OpenMetricsParser) parseComment() error {
 	var err error
 
-	// if p.ignoreExemplar {
-	// 	for t := p.nextToken(); t != tLinebreak; t = p.nextToken() {
-	// 		if t == tEOF {
-	// 			return errors.New("data does not end with # EOF")
-	// 		}
-	// 	}
-	// 	return nil
-	// }
-
 	// Parse the labels.
 	p.eOffsets, err = p.parseLVals(p.eOffsets, true)
 	if err != nil {
@@ -375,7 +371,6 @@ func (p *OpenMetricsParser) parseComment() error {
 	}
 
 	// Read the optional timestamp.
-	// p.hasExemplarTs = false
 	switch t2 := p.nextToken(); t2 {
 	case tEOF:
 		return errors.New("data does not end with # EOF")
@@ -587,4 +582,34 @@ func (p *OpenMetricsParser) Labels() (string, labels.Labels) {
 		}
 	}
 	return metricName, allLabels
+}
+
+func ParseScrapeData(scrapeData []byte) map[string]ParsedSample {
+	newParser := NewParser(scrapeData)
+
+	seriesSamples := make(map[string]ParsedSample)
+	for {
+		var (
+			et  Entry
+			err error
+		)
+
+		if et, err = newParser.Next(); err != nil {
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+			break
+		}
+
+		if et == EntrySeries {
+			_, _, value := newParser.Series()
+			metricName, labels := newParser.Labels()
+			seriesSamples[metricName] = ParsedSample{
+				Value:  value,
+				Labels: labels,
+			}
+		}
+	}
+
+	return seriesSamples
 }

@@ -1,14 +1,11 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"time"
 
-	"github.com/pomyslowynick/scratcheus/labels"
-	"github.com/pomyslowynick/scratcheus/lexer"
+	"github.com/pomyslowynick/scratcheus/parser"
 	"github.com/pomyslowynick/scratcheus/tsdb"
 )
 
@@ -20,47 +17,12 @@ func main() {
 	}
 	timestamp := uint64(time.Now().Unix())
 
-	parsedEntries := parseScrapeData(scrapeData)
+	parsedEntries := parser.ParseScrapeData(scrapeData)
 
 	newHead := tsdb.NewHead()
 
 	for _, entry := range parsedEntries {
-		newHead.Append(entry.labels, timestamp, entry.value)
+		newHead.Append(entry.Labels, timestamp, entry.Value)
 	}
 
-}
-
-type ParsedSample struct {
-	labels labels.Labels
-	value  float64
-}
-
-func parseScrapeData(scrapeData []byte) map[string]ParsedSample {
-	newParser := lexer.NewParser(scrapeData)
-
-	seriesSamples := make(map[string]ParsedSample)
-	for {
-		var (
-			et  lexer.Entry
-			err error
-		)
-
-		if et, err = newParser.Next(); err != nil {
-			if errors.Is(err, io.EOF) {
-				err = nil
-			}
-			break
-		}
-
-		if et == lexer.EntrySeries {
-			_, _, value := newParser.Series()
-			metricName, labels := newParser.Labels()
-			seriesSamples[metricName] = ParsedSample{
-				value:  value,
-				labels: labels,
-			}
-		}
-	}
-
-	return seriesSamples
 }
