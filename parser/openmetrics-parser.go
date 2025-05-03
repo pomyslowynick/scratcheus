@@ -29,10 +29,6 @@ const (
 	sLabels
 	sLValue
 	sValue
-	sTimestamp
-	sExemplar
-	sEValue
-	sETimestamp
 )
 
 const (

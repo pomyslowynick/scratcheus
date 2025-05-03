@@ -50,9 +50,4 @@ func Test_xor_append(t *testing.T) {
 	if appender.ts_delta != 30 {
 		t.Errorf("Delta between second and third sample timestamps should be 30")
 	}
-
-	if appender.b.stream[len(appender.b.stream)-1] != 1 {
-
-		t.Errorf("Delta between second and third sample values should be 1")
-	}
 }

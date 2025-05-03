@@ -110,7 +110,10 @@ func (x *xorAppender) writeVDelta(v float64) {
 	x.b.writeBits(uint64(64-(leading_zeros+trailing_zeros)), 6)
 	x.b.writeBits(delta>>trailing_zeros, 64-(leading_zeros+trailing_zeros))
 
+	x.leading_zeros = leading_zeros
+	x.trailing_zeros = trailing_zeros
 }
+
 func (x *xorAppender) Series() []byte {
 	return x.b.stream
 }

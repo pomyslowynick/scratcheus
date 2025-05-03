@@ -12,6 +12,7 @@ The plan is to have:
 - Xor & Varint encoding
 - Rule evaluation 
 - Promql query engine
+    - Particularly, I want to implement the most popular functions like `rate` and `sum`
 - Minimal TSDB with WAL, maybe WBL
 
 It's a lot of stuff!

@@ -24,5 +24,4 @@ func main() {
 	for _, entry := range parsedEntries {
 		newHead.Append(entry.Labels, timestamp, entry.Value)
 	}
-
 }
