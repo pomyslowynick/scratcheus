@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -15,19 +14,8 @@ import (
 
 type MetricType string
 
-type ParsedSample struct {
-	Labels labels.Labels
-	Value  float64
-}
-
 const (
 	MetricTypeCounter        = MetricType("counter")
-	MetricTypeGauge          = MetricType("gauge")
-	MetricTypeHistogram      = MetricType("histogram")
-	MetricTypeGaugeHistogram = MetricType("gaugehistogram")
-	MetricTypeSummary        = MetricType("summary")
-	MetricTypeInfo           = MetricType("info")
-	MetricTypeStateset       = MetricType("stateset")
 	MetricTypeUnknown        = MetricType("unknown")
 )
 
@@ -67,7 +55,6 @@ const (
 	tLValue
 	tComma
 	tEqual
-	tTimestamp
 	tValue
 )
 
@@ -78,6 +65,12 @@ type OpenMetricsLexer struct {
 	err   error
 	state int
 }
+
+type ParsedSample struct {
+	Labels labels.Labels
+	Value  float64
+}
+
 
 func New(data []byte) OpenMetricsLexer {
 	l := OpenMetricsLexer{b: data}
@@ -120,7 +113,6 @@ type OpenMetricsParser struct {
 	mtype     MetricType
 	val       float64
 	ts        int64
-	hasTS     bool
 	start     int
 	// offsets is a list of offsets into series that describe the positions
 	// of the metric name and label names and values for this series.
@@ -146,11 +138,8 @@ type Entry int
 const (
 	EntryInvalid   Entry = -1
 	EntryType      Entry = 0
-	EntryHelp      Entry = 1
-	EntrySeries    Entry = 2 // EntrySeries marks a series with a simple float64 as value.
-	EntryComment   Entry = 3
-	EntryUnit      Entry = 4
-	EntryHistogram Entry = 5 // EntryHistogram marks a series with a native histogram as a value.
+	EntrySeries    Entry = 1 // EntrySeries marks a series with a simple float64 as value.
+	EntryUnit      Entry = 2
 )
 
 func NewParser(b []byte) *OpenMetricsParser {
@@ -185,8 +174,6 @@ func (t token) String() string {
 		return "LINEBREAK"
 	case tWhitespace:
 		return "WHITESPACE"
-	case tHelp:
-		return "HELP"
 	case tType:
 		return "TYPE"
 	case tUnit:
@@ -195,8 +182,6 @@ func (t token) String() string {
 		return "EOFWORD"
 	case tText:
 		return "TEXT"
-	case tComment:
-		return "COMMENT"
 	case tBlank:
 		return "BLANK"
 	case tMName:
@@ -215,8 +200,6 @@ func (t token) String() string {
 		return "EQUAL"
 	case tComma:
 		return "COMMA"
-	case tTimestamp:
-		return "TIMESTAMP"
 	case tValue:
 		return "VALUE"
 	}
@@ -237,7 +220,7 @@ func (p *OpenMetricsParser) Next() (Entry, error) {
 		return EntryInvalid, io.EOF
 	case tEOF:
 		return EntryInvalid, errors.New("data does not end with # EOF")
-	case tHelp, tType, tUnit:
+	case tType, tUnit:
 		switch t2 := p.nextToken(); t2 {
 		case tMName:
 			mStart := p.l.start
@@ -266,31 +249,13 @@ func (p *OpenMetricsParser) Next() (Entry, error) {
 			switch s := yoloString(p.text); s {
 			case "counter":
 				p.mtype = MetricTypeCounter
-			case "gauge":
-				p.mtype = MetricTypeGauge
-			case "histogram":
-				p.mtype = MetricTypeHistogram
-			case "gaugehistogram":
-				p.mtype = MetricTypeGaugeHistogram
-			case "summary":
-				p.mtype = MetricTypeSummary
-			case "info":
-				p.mtype = MetricTypeInfo
-			case "stateset":
-				p.mtype = MetricTypeStateset
 			case "unknown":
 				p.mtype = MetricTypeUnknown
 			default:
 				return EntryInvalid, fmt.Errorf("invalid metric type %q", s)
 			}
-		case tHelp:
-			if !utf8.Valid(p.text) {
-				return EntryInvalid, fmt.Errorf("help text %q is not a valid utf8 string", p.text)
-			}
 		}
 		switch t {
-		case tHelp:
-			return EntryHelp, nil
 		case tType:
 			return EntryType, nil
 		case tUnit:
@@ -352,50 +317,6 @@ func (p *OpenMetricsParser) Next() (Entry, error) {
 
 func yoloString(b []byte) string {
 	return unsafe.String(unsafe.SliceData(b), len(b))
-}
-
-func (p *OpenMetricsParser) parseComment() error {
-	var err error
-
-	// Parse the labels.
-	p.eOffsets, err = p.parseLVals(p.eOffsets, true)
-	if err != nil {
-		return err
-	}
-	// p.exemplar = p.l.b[p.start:p.l.i]
-
-	// Get the value.
-	// p.exemplarVal, err = p.getFloatValue(p.nextToken(), "exemplar labels")
-	if err != nil {
-		return err
-	}
-
-	// Read the optional timestamp.
-	switch t2 := p.nextToken(); t2 {
-	case tEOF:
-		return errors.New("data does not end with # EOF")
-	case tLinebreak:
-		break
-	// case tTimestamp:
-	// 	p.hasExemplarTs = true
-	// 	var ts float64
-	// 	// A float is enough to hold what we need for millisecond resolution.
-	// 	if ts, err = parseFloat(yoloString(p.l.buf()[1:])); err != nil {
-	// 		return fmt.Errorf("%w while parsing: %q", err, p.l.b[p.start:p.l.i])
-	// 	}
-	// 	if math.IsNaN(ts) || math.IsInf(ts, 0) {
-	// 		return fmt.Errorf("invalid exemplar timestamp %f", ts)
-	// 	}
-	// 	p.exemplarTs = int64(ts * 1000)
-	// 	switch t3 := p.nextToken(); t3 {
-	// 	case tLinebreak:
-	// 	default:
-	// 		return p.parseError("expected next entry after exemplar timestamp", t3)
-	// }
-	default:
-		return p.parseError("expected timestamp or comment", t2)
-	}
-	return nil
 }
 
 func (p *OpenMetricsParser) parseLVals(offsets []int, isExemplar bool) ([]int, error) {
@@ -486,36 +407,11 @@ func (p *OpenMetricsParser) parseSeriesEndOfLine(t token) error {
 		return err
 	}
 
-	p.hasTS = false
 	switch t2 := p.nextToken(); t2 {
 	case tEOF:
 		return errors.New("data does not end with # EOF")
 	case tLinebreak:
 		break
-	case tComment:
-		if err := p.parseComment(); err != nil {
-			return err
-		}
-	case tTimestamp:
-		p.hasTS = true
-		var ts float64
-		// A float is enough to hold what we need for millisecond resolution.
-		if ts, err = parseFloat(yoloString(p.l.buf()[1:])); err != nil {
-			return fmt.Errorf("%w while parsing: %q", err, p.l.b[p.start:p.l.i])
-		}
-		if math.IsNaN(ts) || math.IsInf(ts, 0) {
-			return fmt.Errorf("invalid timestamp %f", ts)
-		}
-		p.ts = int64(ts * 1000)
-		switch t3 := p.nextToken(); t3 {
-		case tLinebreak:
-		case tComment:
-			if err := p.parseComment(); err != nil {
-				return err
-			}
-		default:
-			return p.parseError("expected next entry after timestamp", t3)
-		}
 	}
 
 	return nil
@@ -524,7 +420,7 @@ func (p *OpenMetricsParser) parseSeriesEndOfLine(t token) error {
 // typeRequiresCT returns true if the metric type requires a _created timestamp.
 func typeRequiresCT(t MetricType) bool {
 	switch t {
-	case MetricTypeCounter, MetricTypeSummary, MetricTypeHistogram:
+	case MetricTypeCounter:
 		return true
 	default:
 		return false
@@ -550,15 +446,11 @@ func parseFloat(s string) (float64, error) {
 	return strconv.ParseFloat(s, 64)
 }
 
-func (p *OpenMetricsParser) Series() ([]byte, *int64, float64) {
-	if p.hasTS {
-		ts := p.ts
-		return p.series, &ts, p.val
-	}
-	return p.series, nil, p.val
+func (p *OpenMetricsParser) Series() ([]byte, float64) {
+	return p.series, p.val
 }
 
-func (p *OpenMetricsParser) Labels() (string, labels.Labels) {
+func (p *OpenMetricsParser) labels() (string, labels.Labels) {
 
 	labelsCount := len(p.offsets) / 2
 
@@ -602,8 +494,8 @@ func ParseScrapeData(scrapeData []byte) map[string]ParsedSample {
 		}
 
 		if et == EntrySeries {
-			_, _, value := newParser.Series()
-			metricName, labels := newParser.Labels()
+			_, value := newParser.Series()
+			metricName, labels := newParser.labels()
 			seriesSamples[metricName] = ParsedSample{
 				Value:  value,
 				Labels: labels,

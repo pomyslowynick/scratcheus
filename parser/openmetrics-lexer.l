@@ -23,7 +23,7 @@ M     [a-zA-Z_:]
 C     [^\n]
 S     [ ]
 
-%x sComment sMeta1 sMeta2 sLabels sLValue sValue sTimestamp sExemplar sEValue sETimestamp
+%x sComment sMeta1 sMeta2 sLabels sLValue sValue
 
 %yyc c
 %yyn c = l.next()
@@ -50,20 +50,7 @@ S     [ ]
 <sLabels>=                            l.state = sLValue; return tEqual
 <sLabels>,                            return tComma
 <sLValue>\"(\\.|[^\\"\n])*\"          l.state = sLabels; return tLValue
-<sValue>{S}[^ \n]+                    l.state = sTimestamp; return tValue
-<sTimestamp>{S}[^ \n]+                return tTimestamp
-<sTimestamp>\n                        l.state = sInit; return tLinebreak
-<sTimestamp>{S}#{S}\{                 l.state = sExemplar; return tComment
 
-<sExemplar>{L}({L}|{D})*              return tLName
-<sExemplar>\"(\\.|[^\\"\n])*\"        l.state = sExemplar; return tQString
-<sExemplar>\}                         l.state = sEValue; return tBraceClose
-<sExemplar>=                          l.state = sEValue; return tEqual
-<sEValue>\"(\\.|[^\\"\n])*\"          l.state = sExemplar; return tLValue
-<sExemplar>,                          return tComma
-<sEValue>{S}[^ \n]+                   l.state = sETimestamp; return tValue
-<sETimestamp>{S}[^ \n]+               return tTimestamp
-<sETimestamp>\n                       l.state = sInit; return tLinebreak
 
 %%
 

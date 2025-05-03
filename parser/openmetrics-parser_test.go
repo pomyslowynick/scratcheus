@@ -19,7 +19,7 @@ func Test_parser_metric(t *testing.T) {
 	fmt.Println(parsedSamples)
 
 	expectedSamples := map[string]ParsedSample{
-		"prometheus_tp_requests_total": ParsedSample{
+		"prometheus_http_requests_total": ParsedSample{
 			Labels: labels.Labels{
 				labels.Label{Name: "__name__", Value: "prometheus_http_requests_total"},
 				labels.Label{Name: "code", Value: "200"},
