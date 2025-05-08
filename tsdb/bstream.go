@@ -23,6 +23,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tsdb
 
+import "fmt"
+
 type bit bool
 
 const (
@@ -89,4 +91,81 @@ func (b *bstream) bytes() []byte {
 func (b *bstream) Reset(stream []byte) {
 	b.stream = stream
 	b.count = 0
+}
+
+type Iterator struct {
+	b         bstream
+	countBit  int
+	countByte int
+}
+
+func NewIterator(b bstream) Iterator {
+	return Iterator{
+		b:        b,
+		countBit: 0,
+	}
+}
+
+func (i *Iterator) nextBit() (ret bit) {
+	// We should probably return an error if nextBit is called when stream has been iterated over
+	if len(i.b.stream)-1 < i.countByte {
+		panic("out of bounds")
+	}
+
+	tempByte := (i.b.stream[i.countByte] >> (7 - i.countBit)) & byte(1)
+	i.countBit++
+
+	if i.countBit == 8 {
+		i.countBit = 0
+		i.countByte++
+	}
+
+	switch tempByte {
+	case 0:
+		return zero
+	case 1:
+		return one
+	default:
+		fmt.Errorf("Should always be one or zero, got: %v\n", tempByte)
+		panic("woooot")
+	}
+}
+
+func (i *Iterator) nextBits(count int) (ret []bit) {
+	// We should probably return an error if nextBit is called when stream has been iterated over
+	if len(i.b.stream)-1 < i.countByte {
+		panic("out of bounds")
+	}
+
+	for y := 0; count > y; y++ {
+		b := i.nextBit()
+		ret = append(ret, b)
+	}
+
+	return ret
+}
+
+func (i *Iterator) nextByte() (ret byte) {
+	// We should probably return an error if nextBit is called when stream has been iterated over
+	if len(i.b.stream)-1 < i.countByte {
+		panic("out of bounds")
+	}
+
+	ret = i.b.stream[i.countByte]
+	i.countByte++
+	i.countBit = 0
+
+	return ret
+}
+
+func (i *Iterator) nextBytes(count int) (ret []byte) {
+	if len(i.b.stream)-1 < i.countByte {
+		panic("out of bounds")
+	}
+
+	for y := 0; count > y; y++ {
+		ret = append(ret, i.nextByte())
+	}
+
+	return ret
 }

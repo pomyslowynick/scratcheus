@@ -12,6 +12,7 @@ func Test_xor_append(t *testing.T) {
 	}
 
 	// 27th of April 2025, 12:10:10, 10ns, UTC
+	// 1745755810
 	date := time.Date(2025, time.April, 27, 12, 10, 10, 10, time.UTC)
 	timestamp := uint64(date.Unix())
 	value := 2.75231
@@ -19,7 +20,6 @@ func Test_xor_append(t *testing.T) {
 
 	appender.Append(timestamp, value)
 
-	// After append: [0,1,0,0,0,0,104,14,30,162,64,6,4,187,26,243,161,77]
 	if appender.v != value {
 		t.Errorf("Appended value wasn't registered")
 	}
@@ -32,22 +32,39 @@ func Test_xor_append(t *testing.T) {
 		t.Errorf("Values and timestamp were not encoded as expected")
 	}
 
-	appender.Append(timestamp, value)
-	// After [0,2,0,0,0,0,104,14,30,162,64,6,4,187,26,243,161,77,0,0,0,0,0,0,0,0,0]
+	appender.Append(timestamp+60, value)
 
-	if appender.ts_delta != 0 {
-		t.Errorf("Delta between first and second sample timestamps should be 0")
+	if appender.ts_delta != 60 {
+		t.Errorf("Delta between first and second sample timestamps should be 60: got instead %d", appender.ts_delta)
 	}
 
-	if appender.b.stream[len(appender.b.stream)-1] != 0 {
+	appender.Append(timestamp+90, value+1)
 
-		t.Errorf("Delta between first and second sample values should be 0")
+	if appender.ts_delta != 30 {
+		t.Errorf("Delta between first and second sample timestamps should be 30: got instead %d", appender.ts_delta)
+	}
+}
+
+func Test_xor_read(t *testing.T) {
+	appender := xorAppender{
+		b: bstream{stream: make([]byte, 2)},
+	}
+
+	// 27th of April 2025, 12:10:10, 10ns, UTC
+	// 1745755810
+	date := time.Date(2025, time.April, 27, 12, 10, 10, 10, time.UTC)
+	timestamp := uint64(date.Unix())
+	value := 2.75231
+
+	appender.Append(timestamp, value)
+
+	if appender.v != value {
+		t.Errorf("Appended value wasn't registered")
 	}
 
 	appender.Append(timestamp+30, value+1)
-	// After [0,3,0,0,0,0,104,14,30,162,64,6,4,187,26,243,161,77,0,0,0,0,0,0,0,0,79,108,6]
 
-	if appender.ts_delta != 30 {
-		t.Errorf("Delta between second and third sample timestamps should be 30")
-	}
+	appender.ReadSeries()
+	t.Errorf("Keep to see stdout")
+
 }
