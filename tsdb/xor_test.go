@@ -64,7 +64,20 @@ func Test_xor_read(t *testing.T) {
 
 	appender.Append(timestamp+30, value+1)
 
-	appender.ReadSeries()
-	t.Errorf("Keep to see stdout")
+	appender.Append(timestamp+60, value+2)
 
+	reader := NewXorReader(appender.b)
+	retrievedSeries := reader.ReadSeries()
+
+	for i, v := range retrievedSeries.values {
+		if v != value+float64(i) {
+			t.Errorf("Value %f not equal to expected value of %f", v, value+float64(i))
+		}
+	}
+
+	for i, ts := range retrievedSeries.timestamps {
+		if ts != timestamp+uint64(i*30) {
+			t.Errorf("Timestamp %d not equal to expected value of %d", ts, timestamp+uint64(i*30))
+		}
+	}
 }

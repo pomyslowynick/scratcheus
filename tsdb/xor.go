@@ -119,20 +119,32 @@ func (x *xorAppender) Series() []byte {
 	return x.b.stream
 }
 
-func (x *xorAppender) ReadSeries() {
-	var timestamp uint64
-	var ts_delta uint64
-	var value float64
-	var tempValue uint64
-	var leadingZeros int
-	var trailingZeros int
-	// var previousValue uint64
-	// var previousTimestamp uint64
+type xorReader struct {
+	stream bstream
 
+	timestamp     uint64
+	ts_delta      uint64
+	value         float64
+	tempValue     uint64
+	leadingZeros  int
+	trailingZeros int
+}
+
+type Series struct {
+	values     []float64
+	timestamps []uint64
+}
+
+func NewXorReader(s bstream) xorReader {
+	return xorReader{stream: s}
+}
+
+// Refactor this function, turn it into smaller functions
+func (x *xorReader) ReadSeries() Series {
 	var values []float64
 	var timestamps []uint64
 
-	streamIterator := NewIterator(x.b)
+	streamIterator := NewIterator(x.stream)
 
 	firstByte := streamIterator.nextByte()
 	secondByte := streamIterator.nextByte()
@@ -140,70 +152,140 @@ func (x *xorAppender) ReadSeries() {
 	samplesNum := (int16(firstByte) << 8) + int16(secondByte)
 
 	if samplesNum == 0 {
-		return
+		return Series{}
 	}
 
 	// Read timestamp - no encoding
 	timestampBytes := streamIterator.nextBytes(8)
 
 	for i, byt := range timestampBytes {
-		timestamp += uint64(byt) << ((7 - i) * 8)
+		x.timestamp += uint64(byt) << ((7 - i) * 8)
 	}
-	timestamps = append(timestamps, timestamp)
+	timestamps = append(timestamps, x.timestamp)
 
 	// Read first float value - no encoding
 	valueBytes := streamIterator.nextBytes(8)
 
 	for i, byt := range valueBytes {
-		tempValue += uint64(byt) << ((7 - i) * 8)
+		x.tempValue += uint64(byt) << ((7 - i) * 8)
 	}
-	leadingZeros = bits.LeadingZeros64(tempValue)
-	trailingZeros = bits.TrailingZeros64(tempValue)
-	value = math.Float64frombits(tempValue)
+	x.leadingZeros = bits.LeadingZeros64(x.tempValue)
+	x.trailingZeros = bits.TrailingZeros64(x.tempValue)
+	value := math.Float64frombits(x.tempValue)
+
+	x.value = value
 	values = append(values, value)
 
 	if samplesNum == 1 {
-		return
+		return Series{
+			values:     values,
+			timestamps: timestamps,
+		}
 	}
 
 	// Second tuple is always the first timestamp delta and xored value
 	timestampDelta := streamIterator.nextBytes(8)
 
 	for i, byt := range timestampDelta {
-		ts_delta += uint64(byt) << ((7 - i) * 8)
+		x.ts_delta += uint64(byt) << ((7 - i) * 8)
 	}
-	timestamps = append(timestamps, timestamp+ts_delta)
+	timestamps = append(timestamps, x.timestamp+x.ts_delta)
+	x.timestamp = x.timestamp + x.ts_delta
 
 	// Second value
-	isDeltaZero := !bool(streamIterator.nextBit())
+	secondValue := x.readXorEncodedValue(&streamIterator)
+	values = append(values, secondValue)
+	x.value = secondValue
+
+	// Read rest of the encoded samples
+	//   Timestamps after first delta are deltas of deltas with variable encoding length
+	//   TODO: Move it to a separate function
+	var tsDod uint64
+	tsDodFirstBit := streamIterator.nextBit()
+	switch tsDodFirstBit {
+	case zero:
+		tsDod = 0
+	case one:
+		tsDodSecondBit := streamIterator.nextBit()
+		switch tsDodSecondBit {
+		case zero:
+			tempDod := streamIterator.nextBits(7)
+			tsDod = bitsSliceToInt(tempDod)
+		case one:
+			tsDodThirdBit := streamIterator.nextBit()
+			switch tsDodThirdBit {
+			case zero:
+				tempDod := streamIterator.nextBits(9)
+				tsDod = bitsSliceToInt(tempDod)
+			case one:
+				tsDodFourthBit := streamIterator.nextBit()
+				switch tsDodFourthBit {
+				case zero:
+					tempDod := streamIterator.nextBits(12)
+					tsDod = bitsSliceToInt(tempDod)
+				case one:
+					tempDod := streamIterator.nextBits(32)
+					tsDod = bitsSliceToInt(tempDod)
+
+				}
+			}
+		}
+
+	}
+
+	timestamps = append(timestamps, x.timestamp+x.ts_delta+tsDod)
+	x.timestamp = x.timestamp + x.ts_delta + tsDod
+	x.ts_delta = x.ts_delta + tsDod
+
+	// Second value
+	values = append(values, x.readXorEncodedValue(&streamIterator))
+
+	return Series{
+		values:     values,
+		timestamps: timestamps,
+	}
+}
+
+func (x *xorReader) readXorEncodedValue(si *Iterator) float64 {
+	var finalValue float64
+	isDeltaZero := !bool(si.nextBit())
 
 	// TODO: Double switch is a smell, there might be a better idiom for that
 	switch {
 	case isDeltaZero:
-		values = append(values, 0)
+		return finalValue
 	case !isDeltaZero:
-		controlBit := bool(streamIterator.nextBit())
+		controlBit := bool(si.nextBit())
 		switch {
 		case controlBit:
-			leadingZeros := bitsSliceToInt(streamIterator.nextBits(5))
-			valueLen := bitsSliceToInt(streamIterator.nextBits(6))
-			xoredValue := bitsSliceToInt(streamIterator.nextBits(int(valueLen)))
+			leadingZeros := bitsSliceToInt(si.nextBits(5))
+			valueLen := bitsSliceToInt(si.nextBits(6))
+			xoredValue := bitsSliceToInt(si.nextBits(int(valueLen)))
 			trailingZeros := 64 - (leadingZeros + valueLen)
-			decodedValue := math.Float64bits(values[0]) | (xoredValue << trailingZeros)
-			fmt.Println(math.Float64frombits((decodedValue)))
+			decodedValue := math.Float64bits(x.value) ^ (xoredValue << trailingZeros)
+			dvFloat := math.Float64frombits(decodedValue)
+			x.leadingZeros = int(leadingZeros)
+			x.trailingZeros = int(trailingZeros)
+
+			return dvFloat
 
 		case !controlBit:
-			sigBits := 64 - (leadingZeros + trailingZeros)
-			xoredValue := streamIterator.nextBits(sigBits)
+			sigBits := 64 - (x.leadingZeros + x.trailingZeros)
+			xoredValue := si.nextBits(sigBits)
+
+			valueBits := make([]bit, x.leadingZeros)
 
 			xoredShiftedValue := bitsSliceToInt(xoredValue)
-			fmt.Printf("%b\n", xoredShiftedValue)
+
+			for _, v := range xoredValue {
+				valueBits = append(valueBits, v)
+			}
+			fmt.Printf("Decoded value without the control bit %b\n", xoredShiftedValue)
 		}
+
 	}
-
-	fmt.Printf("timestamps: %v, values: %v\n", timestamps, values)
-	// Read rest of the encoded samples
-
+	// Should never reach this part
+	return finalValue
 }
 
 func bitsRange(v int64, nbits int) bool {
