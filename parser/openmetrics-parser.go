@@ -15,8 +15,8 @@ import (
 type MetricType string
 
 const (
-	MetricTypeCounter        = MetricType("counter")
-	MetricTypeUnknown        = MetricType("unknown")
+	MetricTypeCounter = MetricType("counter")
+	MetricTypeUnknown = MetricType("unknown")
 )
 
 type token int
@@ -29,6 +29,7 @@ const (
 	sLabels
 	sLValue
 	sValue
+	sTimestamp
 )
 
 const (
@@ -52,6 +53,7 @@ const (
 	tComma
 	tEqual
 	tValue
+	tTimestamp
 )
 
 type OpenMetricsLexer struct {
@@ -66,7 +68,6 @@ type ParsedSample struct {
 	Labels labels.Labels
 	Value  float64
 }
-
 
 func New(data []byte) OpenMetricsLexer {
 	l := OpenMetricsLexer{b: data}
@@ -132,10 +133,10 @@ type OpenMetricsParser struct {
 type Entry int
 
 const (
-	EntryInvalid   Entry = -1
-	EntryType      Entry = 0
-	EntrySeries    Entry = 1 // EntrySeries marks a series with a simple float64 as value.
-	EntryUnit      Entry = 2
+	EntryInvalid Entry = -1
+	EntryType    Entry = 0
+	EntrySeries  Entry = 1 // EntrySeries marks a series with a simple float64 as value.
+	EntryUnit    Entry = 2
 )
 
 func NewParser(b []byte) *OpenMetricsParser {

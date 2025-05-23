@@ -79,13 +79,12 @@ func (x *xorAppender) Append(t uint64, v float64) {
 		x.writeVDelta(v)
 	}
 
-	num_plus_one := num + 1
-	x.b.stream[0] = byte(num_plus_one >> 8)
-	x.b.stream[1] = byte(num_plus_one)
+	num += 1
+	x.b.stream[0] = byte(num >> 8)
+	x.b.stream[1] = byte(num)
 
 	x.t = t
 	x.v = v
-
 }
 
 func (x *xorAppender) writeVDelta(v float64) {

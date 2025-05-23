@@ -35,6 +35,8 @@ yystate0:
 		goto yystart42
 	case 6: // start condition: sValue
 		goto yystart46
+	case 7: // start condition: sTimestamp
+		goto yystart50
 	}
 
 yystate1:
@@ -423,13 +425,67 @@ yystart46:
 	switch {
 	default:
 		goto yyabort
-	case c == '{':
+	case c == ' ':
 		goto yystate47
+	case c == '{':
+		goto yystate49
 	}
 
 yystate47:
 	c = l.next()
+	switch {
+	default:
+		goto yyabort
+	case c >= '\x01' && c <= '\t' || c >= '\v' && c <= '\x1f' || c >= '!' && c <= 'ÿ':
+		goto yystate48
+	}
+
+yystate48:
+	c = l.next()
+	switch {
+	default:
+		goto yyrule18
+	case c >= '\x01' && c <= '\t' || c >= '\v' && c <= '\x1f' || c >= '!' && c <= 'ÿ':
+		goto yystate48
+	}
+
+yystate49:
+	c = l.next()
 	goto yyrule10
+
+yystate50:
+	c = l.next()
+yystart50:
+	switch {
+	default:
+		goto yyabort
+	case c == ' ':
+		goto yystate52
+	case c == '\n':
+		goto yystate51
+	}
+
+yystate51:
+	c = l.next()
+	goto yyrule20
+
+yystate52:
+	c = l.next()
+	switch {
+	default:
+		goto yyabort
+	case c >= '\x01' && c <= '\t' || c >= '\v' && c <= '\x1f' || c >= '!' && c <= 'ÿ':
+		goto yystate53
+	}
+
+yystate53:
+	c = l.next()
+	switch {
+	default:
+		goto yyrule19
+	case c >= '\x01' && c <= '\t' || c >= '\v' && c <= '\x1f' || c >= '!' && c <= 'ÿ':
+		goto yystate53
+	}
 
 yyrule1: // #{S}
 	{
@@ -523,9 +579,25 @@ yyrule16: // ,
 		return tComma
 	}
 yyrule17: // \"(\\.|[^\\"\n])*\"
-	if true { // avoid go vet determining the below panic will not be reached
+	{
 		l.state = sLabels
 		return tLValue
+		goto yystate0
+	}
+yyrule18: // {S}[^ \n]+
+	{
+		l.state = sTimestamp
+		return tValue
+		goto yystate0
+	}
+yyrule19: // {S}[^ \n]+
+	{
+		return tTimestamp
+	}
+yyrule20: // \n
+	if true { // avoid go vet determining the below panic will not be reached
+		l.state = sInit
+		return tLinebreak
 		goto yystate0
 	}
 	panic("unreachable")
@@ -559,6 +631,9 @@ yyabort: // no lexem recognized
 		}
 		if false {
 			goto yystate46
+		}
+		if false {
+			goto yystate50
 		}
 	}
 
