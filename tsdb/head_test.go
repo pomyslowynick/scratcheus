@@ -1,7 +1,6 @@
 package tsdb
 
 import (
-	"slices"
 	"testing"
 	"time"
 
@@ -73,14 +72,16 @@ func Test_head_getMemSeries(t *testing.T) {
 	}
 
 	series := head.ReadMemSeries(labelsLong)
-	expectedSeriesValues := []float64{2.75231, 2.75231, 2.75231, 3.75231, 4.75231, 5.75231, 10.75231}
+	expectedValues := []float64{2.75231, 2.75231, 2.75231, 3.75231, 4.75231, 5.75231, 10.75231}
 	expectedTimestamps := []uint64{1745755810, 1745755810, 1745755810, 1745755813, 1745755840, 1745755870, 1745756310}
 
-	if !slices.Equal(series.timestamps, expectedTimestamps) {
-		t.Errorf("Series didn't contain expected timestamps: expected %v, actual %v", series.timestamps, expectedTimestamps)
-	}
+	for i, v := range series.samples {
+		if expectedValues[i] != v.value {
+			t.Errorf("Sample didn't contain expected timestamps: expected %v, actual %v", expectedValues[i], v.value)
+		}
 
-	if !slices.Equal(series.values, expectedSeriesValues) {
-		t.Errorf("Series didn't contain expected values: expected %v, actual %v", series.values, expectedSeriesValues)
+		if expectedTimestamps[i] != v.timestamp {
+			t.Errorf("Sample didn't contain expected timestamps: expected %v, actual %v", expectedTimestamps[i], v.timestamp)
+		}
 	}
 }

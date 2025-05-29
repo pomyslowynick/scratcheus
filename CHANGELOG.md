@@ -28,3 +28,9 @@ There's a lot that could be refactored in my code, it's pretty ugly at the momen
 
 - [x] Unit tests for xor encoding
 - [x] Reader of xor encoded samples
+
+## 29th of May
+
+Found issues with parsing, encoding and decoding that I had to fix. Unit tests are really helpful here to make sure it keeps working as intended, I should add a CI configuration to automatically run them each time I commit.
+
+Need to tackle segments and chunks next, code could use a refactor too, I've been doing a lot of ad hoc quick fixes/implementations which are hard to read.

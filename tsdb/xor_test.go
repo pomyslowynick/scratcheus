@@ -69,15 +69,15 @@ func Test_xor_read(t *testing.T) {
 	reader := NewXorReader(appender.b)
 	retrievedSeries := reader.readSeries()
 
-	for i, v := range retrievedSeries.values {
-		if v != value+float64(i) {
-			t.Errorf("Value %f not equal to expected value of %f", v, value+float64(i))
+	for i, v := range retrievedSeries.samples {
+		if v.value != value+float64(i) {
+			t.Errorf("Value %f not equal to expected value of %f", v.value, value+float64(i))
 		}
 	}
 
-	for i, ts := range retrievedSeries.timestamps {
-		if ts != timestamp+uint64(i*30) {
-			t.Errorf("Timestamp %d not equal to expected value of %d", ts, timestamp+uint64(i*30))
+	for i, ts := range retrievedSeries.samples {
+		if ts.timestamp != timestamp+uint64(i*30) {
+			t.Errorf("Timestamp %d not equal to expected value of %d", ts.timestamp, timestamp+uint64(i*30))
 		}
 	}
 }

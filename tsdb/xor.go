@@ -128,9 +128,13 @@ type xorReader struct {
 	trailingZeros int
 }
 
+type Sample struct {
+	value     float64
+	timestamp uint64
+}
+
 type Series struct {
-	values     []float64
-	timestamps []uint64
+	samples []Sample
 }
 
 func NewXorReader(s bstream) xorReader {
@@ -139,30 +143,45 @@ func NewXorReader(s bstream) xorReader {
 
 // Refactor this function, turn it into smaller functions
 func (x *xorReader) readSeries() Series {
-	var values []float64
-	var timestamps []uint64
+	var samples []Sample
 
-	streamIterator := NewIterator(x.stream)
+	si := NewIterator(x.stream)
 
-	firstByte := streamIterator.nextByte()
-	secondByte := streamIterator.nextByte()
+	samplesNum := int((int16(si.nextByte()) << 8) + int16(si.nextByte()))
 
-	samplesNum := int((int16(firstByte) << 8) + int16(secondByte))
-
-	if samplesNum == 0 {
+	//  I don't really like this switch statement, but it seems clearer than if statements + returns
+	switch {
+	case samplesNum == 0:
+		// theoretically impossible, any series should should have this value set
 		return Series{}
+	case samplesNum == 1:
+		samples = append(samples, x.readFirstSample(&si))
+		return Series{samples: samples}
+	case samplesNum == 2:
+		samples = append(samples, x.readSecondSample(&si), x.readFirstSample(&si))
+		return Series{samples: samples}
+	case samplesNum > 2:
+		samples = append(samples, x.readSecondSample(&si), x.readFirstSample(&si))
 	}
 
+	for i := 2; i != samplesNum; i++ {
+		samples = append(samples, x.readSamples(&si))
+	}
+
+	return Series{samples: samples}
+}
+
+func (x *xorReader) readFirstSample(si *Iterator) Sample {
+
 	// Read timestamp - no encoding
-	timestampBytes := streamIterator.nextBytes(8)
+	timestampBytes := si.nextBytes(8)
 
 	for i, byt := range timestampBytes {
 		x.timestamp += uint64(byt) << ((7 - i) * 8)
 	}
-	timestamps = append(timestamps, x.timestamp)
 
 	// Read first float value - no encoding
-	valueBytes := streamIterator.nextBytes(8)
+	valueBytes := si.nextBytes(8)
 
 	for i, byt := range valueBytes {
 		x.tempValue += uint64(byt) << ((7 - i) * 8)
@@ -172,79 +191,75 @@ func (x *xorReader) readSeries() Series {
 	value := math.Float64frombits(x.tempValue)
 
 	x.value = value
-	values = append(values, value)
 
-	if samplesNum == 1 {
-		return Series{
-			values:     values,
-			timestamps: timestamps,
-		}
+	return Sample{
+		timestamp: x.timestamp,
+		value:     x.value,
 	}
+}
+
+func (x *xorReader) readSecondSample(si *Iterator) Sample {
 
 	// Second tuple is always the first timestamp delta and xored value
-	timestampDelta := streamIterator.nextBytes(8)
-
+	timestampDelta := si.nextBytes(8)
 	for i, byt := range timestampDelta {
 		x.ts_delta += uint64(byt) << ((7 - i) * 8)
 	}
-	timestamps = append(timestamps, x.timestamp+x.ts_delta)
 	x.timestamp = x.timestamp + x.ts_delta
 
-	// Second value
-	secondValue := x.readXorEncodedValue(&streamIterator)
-	values = append(values, secondValue)
-	x.value = secondValue
+	x.value = x.readXorEncodedValue(si)
 
-	// Read rest of the encoded samples
+	return Sample{
+		timestamp: x.timestamp,
+		value:     x.value,
+	}
+}
+
+func (x *xorReader) readSamples(si *Iterator) Sample {
 	//   Timestamps after first delta are deltas of deltas with variable encoding length
-	//   TODO: Move it to a separate function
-	for readSamples := 2; readSamples != samplesNum; readSamples++ {
-		var tsDod uint64
-		tsDodFirstBit := streamIterator.nextBit()
-		switch tsDodFirstBit {
+	var tsDod uint64
+	tsDodFirstBit := si.nextBit()
+	switch tsDodFirstBit {
+	case zero:
+		tsDod = 0
+	case one:
+		tsDodSecondBit := si.nextBit()
+		switch tsDodSecondBit {
 		case zero:
-			tsDod = 0
+			tempDod := si.nextBits(7)
+			tsDod = bitsSliceToInt(tempDod)
 		case one:
-			tsDodSecondBit := streamIterator.nextBit()
-			switch tsDodSecondBit {
+			tsDodThirdBit := si.nextBit()
+			switch tsDodThirdBit {
 			case zero:
-				tempDod := streamIterator.nextBits(7)
+				tempDod := si.nextBits(9)
 				tsDod = bitsSliceToInt(tempDod)
 			case one:
-				tsDodThirdBit := streamIterator.nextBit()
-				switch tsDodThirdBit {
+				tsDodFourthBit := si.nextBit()
+				switch tsDodFourthBit {
 				case zero:
-					tempDod := streamIterator.nextBits(9)
+					tempDod := si.nextBits(12)
 					tsDod = bitsSliceToInt(tempDod)
 				case one:
-					tsDodFourthBit := streamIterator.nextBit()
-					switch tsDodFourthBit {
-					case zero:
-						tempDod := streamIterator.nextBits(12)
-						tsDod = bitsSliceToInt(tempDod)
-					case one:
-						tempDod := streamIterator.nextBits(32)
-						tsDod = bitsSliceToInt(tempDod)
+					tempDod := si.nextBits(32)
+					tsDod = bitsSliceToInt(tempDod)
 
-					}
 				}
 			}
-
 		}
 
-		timestamps = append(timestamps, x.timestamp+x.ts_delta+tsDod)
-		x.timestamp = x.timestamp + x.ts_delta + tsDod
-		x.ts_delta = x.ts_delta + tsDod
-
-		// Read rest of the values
-		newValue := x.readXorEncodedValue(&streamIterator)
-		values = append(values, newValue)
-		x.value = newValue
 	}
 
-	return Series{
-		values:     values,
-		timestamps: timestamps,
+	x.timestamp = x.timestamp + x.ts_delta + tsDod
+	x.ts_delta = x.ts_delta + tsDod
+
+	// Read rest of the values
+	newValue := x.readXorEncodedValue(si)
+	x.value = newValue
+
+	return Sample{
+		timestamp: x.timestamp,
+		value:     x.value,
 	}
 }
 
