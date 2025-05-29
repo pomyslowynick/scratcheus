@@ -77,11 +77,11 @@ func Test_head_getMemSeries(t *testing.T) {
 
 	for i, v := range series.samples {
 		if expectedValues[i] != v.value {
-			t.Errorf("Sample didn't contain expected timestamps: expected %v, actual %v", expectedValues[i], v.value)
+			t.Errorf("Sample didn't contain expected value: expected %v, actual %v", expectedValues[i], v.value)
 		}
 
 		if expectedTimestamps[i] != v.timestamp {
-			t.Errorf("Sample didn't contain expected timestamps: expected %v, actual %v", expectedTimestamps[i], v.timestamp)
+			t.Errorf("Sample didn't contain expected timestamp: expected %v, actual %v", expectedTimestamps[i], v.timestamp)
 		}
 	}
 }

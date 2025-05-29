@@ -158,10 +158,10 @@ func (x *xorReader) readSeries() Series {
 		samples = append(samples, x.readFirstSample(&si))
 		return Series{samples: samples}
 	case samplesNum == 2:
-		samples = append(samples, x.readSecondSample(&si), x.readFirstSample(&si))
+		samples = append(samples, x.readFirstSample(&si), x.readSecondSample(&si))
 		return Series{samples: samples}
 	case samplesNum > 2:
-		samples = append(samples, x.readSecondSample(&si), x.readFirstSample(&si))
+		samples = append(samples, x.readFirstSample(&si), x.readSecondSample(&si))
 	}
 
 	for i := 2; i != samplesNum; i++ {
