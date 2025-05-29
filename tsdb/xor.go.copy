@@ -170,7 +170,7 @@ func (x *xorReader) readSeries() Series {
 	return Series{samples: samples}
 }
 
-func readUnencoded(si *Iterator) uint64 {
+func (x *xorReader) readUnencoded(si *Iterator) uint64 {
 	var tempValue uint64
 
 	bytes := si.nextBytes(8)
@@ -183,13 +183,12 @@ func readUnencoded(si *Iterator) uint64 {
 
 func (x *xorReader) readFirstSample(si *Iterator) Sample {
 
-	x.timestamp = readUnencoded(si)
-
-	tempValue := readUnencoded(si)
+	tempValue := x.readUnencoded(si)
 
 	x.leadingZeros = bits.LeadingZeros64(tempValue)
 	x.trailingZeros = bits.TrailingZeros64(tempValue)
 
+	x.timestamp = x.readUnencoded(si)
 	x.value = math.Float64frombits(tempValue)
 
 	return Sample{
@@ -201,7 +200,10 @@ func (x *xorReader) readFirstSample(si *Iterator) Sample {
 func (x *xorReader) readSecondSample(si *Iterator) Sample {
 
 	// Second tuple is always the first timestamp delta and xored value
-	x.ts_delta = readUnencoded(si)
+	timestampDelta := si.nextBytes(8)
+	for i, byt := range timestampDelta {
+		x.ts_delta += uint64(byt) << ((7 - i) * 8)
+	}
 	x.timestamp = x.timestamp + x.ts_delta
 
 	x.value = x.readXorEncodedValue(si)
@@ -216,8 +218,6 @@ func (x *xorReader) readSamples(si *Iterator) Sample {
 	//   Timestamps after first delta are deltas of deltas with variable encoding length
 	var tsDod uint64
 	tsDodFirstBit := si.nextBit()
-
-	// not sure if we can simplify this function, will look up source
 	switch tsDodFirstBit {
 	case zero:
 		tsDod = 0
@@ -253,7 +253,8 @@ func (x *xorReader) readSamples(si *Iterator) Sample {
 	x.ts_delta = x.ts_delta + tsDod
 
 	// Read rest of the values
-	x.value = x.readXorEncodedValue(si)
+	newValue := x.readXorEncodedValue(si)
+	x.value = newValue
 
 	return Sample{
 		timestamp: x.timestamp,
@@ -262,10 +263,14 @@ func (x *xorReader) readSamples(si *Iterator) Sample {
 }
 
 func (x *xorReader) readXorEncodedValue(si *Iterator) float64 {
-
+	var finalValue float64
 	isDeltaZero := !bool(si.nextBit())
 
-	if !isDeltaZero {
+	// TODO: Double switch is a smell, there might be a better idiom for that
+	switch {
+	case isDeltaZero:
+		return x.value
+	case !isDeltaZero:
 		controlBit := bool(si.nextBit())
 		switch {
 		case controlBit:
@@ -273,11 +278,12 @@ func (x *xorReader) readXorEncodedValue(si *Iterator) float64 {
 			valueLen := bitsSliceToInt(si.nextBits(6))
 			xoredValue := bitsSliceToInt(si.nextBits(int(valueLen)))
 			trailingZeros := 64 - (leadingZeros + valueLen)
-			decodedValue := math.Float64frombits(math.Float64bits(x.value) ^ (xoredValue << trailingZeros))
+			decodedValue := math.Float64bits(x.value) ^ (xoredValue << trailingZeros)
+			dvFloat := math.Float64frombits(decodedValue)
 			x.leadingZeros = int(leadingZeros)
 			x.trailingZeros = int(trailingZeros)
 
-			return decodedValue
+			return dvFloat
 
 		case !controlBit:
 			sigBits := 64 - x.leadingZeros - x.trailingZeros
@@ -290,9 +296,8 @@ func (x *xorReader) readXorEncodedValue(si *Iterator) float64 {
 		}
 
 	}
-
-	// If delta is zero then we return last value
-	return x.value
+	// Should never reach this part
+	return finalValue
 }
 
 func bitsRange(v int64, nbits int) bool {
@@ -312,5 +317,5 @@ func bitsSliceToInt(bits []bit) uint64 {
 }
 
 func NewAppender() xorAppender {
-	return xorAppender{b: bstream{stream: make([]byte, 2)}}
+	return xorAppender{b: bstream{stream: make([]byte, 2, 2)}}
 }

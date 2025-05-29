@@ -23,8 +23,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tsdb
 
-import "fmt"
-
 type bit bool
 
 const (
@@ -126,8 +124,7 @@ func (i *Iterator) nextBit() (ret bit) {
 	case 1:
 		return one
 	default:
-		fmt.Errorf("Should always be one or zero, got: %v\n", tempByte)
-		panic("woooot")
+		panic("woooot, you got bit which wasn't a 1 or 0, you are running a quantum compute")
 	}
 }
 
