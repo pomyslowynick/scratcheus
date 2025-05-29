@@ -67,6 +67,20 @@ func (h *Head) GetMemSeries(l labels.Labels) *memSeries {
 	}
 }
 
+func (h *Head) ReadMemSeries(l labels.Labels) Series {
+	id, err := l.HashLabels()
+	if err != nil {
+		panic("Should never happen")
+	}
+
+	if v, ok := h.series[id]; ok {
+		reader := NewXorReader(v.app.b)
+		return reader.readSeries()
+	} else {
+		return Series{}
+	}
+}
+
 func (m *memSeries) Bytes() []byte {
 	return m.app.Series()
 }

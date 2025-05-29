@@ -1,6 +1,7 @@
 package tsdb
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -21,7 +22,7 @@ func Test_head_append(t *testing.T) {
 		labels.Label{Value: "2.54.1", Name: "version"},
 	}
 
-	timestamp := uint64(time.Now().Unix())
+	timestamp := uint64(time.Date(2025, time.April, 27, 12, 10, 10, 10, time.UTC).Unix())
 	value := 2.75231
 	head := NewHead()
 	head.Append(labelsLong, timestamp, value)
@@ -54,13 +55,32 @@ func Test_head_getMemSeries(t *testing.T) {
 		t.Errorf("Should have returned a nil pointer")
 	}
 
-	timestamp := uint64(time.Now().Unix())
+	timestamp := uint64(time.Date(2025, time.April, 27, 12, 10, 10, 10, time.UTC).Unix())
 	value := 2.75231
+
+	head.Append(labelsLong, timestamp, value)
+	head.Append(labelsLong, timestamp, value)
 	head.Append(labelsLong, timestamp, value)
 
-	memSeries = head.GetMemSeries(labelsLong)
+	head.Append(labelsLong, timestamp+3, value+1)
+	head.Append(labelsLong, timestamp+30, value+2)
+	head.Append(labelsLong, timestamp+60, value+3)
+	head.Append(labelsLong, timestamp+500, value+8)
 
+	memSeries = head.GetMemSeries(labelsLong)
 	if memSeries == nil {
 		t.Errorf("Created series wasn't returned")
+	}
+
+	series := head.ReadMemSeries(labelsLong)
+	expectedSeriesValues := []float64{2.75231, 2.75231, 2.75231, 3.75231, 4.75231, 5.75231, 10.75231}
+	expectedTimestamps := []uint64{1745755810, 1745755810, 1745755810, 1745755813, 1745755840, 1745755870, 1745756310}
+
+	if !slices.Equal(series.timestamps, expectedTimestamps) {
+		t.Errorf("Series didn't contain expected timestamps: expected %v, actual %v", series.timestamps, expectedTimestamps)
+	}
+
+	if !slices.Equal(series.values, expectedSeriesValues) {
+		t.Errorf("Series didn't contain expected values: expected %v, actual %v", series.values, expectedSeriesValues)
 	}
 }
