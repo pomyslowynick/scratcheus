@@ -29,10 +29,6 @@ import (
 	"math/bits"
 )
 
-type Chunk struct {
-	b bstream
-}
-
 type xorAppender struct {
 	b              bstream
 	t              uint64
@@ -40,6 +36,14 @@ type xorAppender struct {
 	leading_zeros  int
 	trailing_zeros int
 	ts_delta       uint64
+}
+
+func (x *xorAppender) Compact() {
+	if l := len(x.b.stream); cap(x.b.stream) > l+32 {
+		buf := make([]byte, l)
+		copy(buf, x.b.stream)
+		x.b.stream = buf
+	}
 }
 
 func (x *xorAppender) Append(t uint64, v float64) {

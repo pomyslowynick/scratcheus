@@ -81,3 +81,45 @@ func Test_xor_read(t *testing.T) {
 		}
 	}
 }
+func Test_xor_compact(t *testing.T) {
+	appender := xorAppender{
+		b: bstream{stream: make([]byte, 2)},
+	}
+
+	// 27th of April 2025, 12:10:10, 10ns, UTC
+	// 1745755810
+	date := time.Date(2025, time.April, 27, 12, 10, 10, 10, time.UTC)
+	timestamp := uint64(date.Unix())
+	value := 2.75231
+
+	appender.Append(timestamp, value)
+
+	if appender.v != value {
+		t.Errorf("Appended value wasn't registered")
+	}
+
+	appender.Append(timestamp+30, value+1)
+
+	appender.Append(timestamp+60, value+2)
+	appender.Append(timestamp+60, value+2)
+	appender.Append(timestamp+60, value+2)
+	appender.Append(timestamp+90, value+3)
+	appender.Append(timestamp+90, value+3)
+	appender.Append(timestamp+91, value+4)
+	appender.Append(timestamp+92, value+5)
+	appender.Append(timestamp+93, value+6)
+	appender.Append(timestamp+94, value+7)
+	appender.Append(timestamp+94, value+7)
+	appender.Append(timestamp+94, value+7)
+	appender.Append(timestamp+94, value+7)
+	appender.Append(timestamp+94, value+7)
+	appender.Append(timestamp+94, value+7)
+	appender.Append(timestamp+94, value+7)
+	appender.Append(timestamp+94, value+7)
+	appender.Append(timestamp+94, value+7)
+	appender.Append(timestamp+94, value+7)
+	appender.Append(timestamp+94, value+7)
+
+	appender.Compact()
+
+}

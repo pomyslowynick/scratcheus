@@ -23,6 +23,7 @@ func (m *memSeries) Append(t uint64, v float64) {
 type Head struct {
 	lastSeriesRef uint64
 	series        map[uint64]*memSeries
+	headChunk     Chunk
 }
 
 func NewHead() Head {
