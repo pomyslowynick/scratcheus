@@ -7,59 +7,46 @@ import (
 	"github.com/pomyslowynick/scratcheus/labels"
 )
 
-var labelsLong labels.Labels
+var labelsLong labels.Labels = labels.Labels{
+	labels.Label{Value: "prometheus_build_info", Name: "__name__"},
+	labels.Label{Value: "release-2.54", Name: "branch"},
+	labels.Label{Value: "amd64", Name: "goarch"},
+	labels.Label{Value: "linux", Name: "goos"},
+	labels.Label{Value: "go1.23.4", Name: "goversion"},
+	labels.Label{Value: "c5e015d29534f06bd1d238c64a06b7ac41abdd7f", Name: "revision"},
+	labels.Label{Value: "netgo,builtinassets,stringlabels", Name: "tags"},
+	labels.Label{Value: "2.54.1", Name: "version"},
+}
+
+var timestamp uint64 = uint64(time.Date(2025, time.April, 27, 12, 10, 10, 10, time.UTC).Unix())
 
 func Test_head_append(t *testing.T) {
-	labelsLong = labels.Labels{
-		labels.Label{Value: "prometheus_build_info", Name: "__name__"},
-		labels.Label{Value: "release-2.54", Name: "branch"},
-		labels.Label{Value: "amd64", Name: "goarch"},
-		labels.Label{Value: "linux", Name: "goos"},
-		labels.Label{Value: "go1.23.4", Name: "goversion"},
-		labels.Label{Value: "c5e015d29534f06bd1d238c64a06b7ac41abdd7f", Name: "revision"},
-		labels.Label{Value: "netgo,builtinassets,stringlabels", Name: "tags"},
-		labels.Label{Value: "2.54.1", Name: "version"},
-	}
-
-	timestamp := uint64(time.Date(2025, time.April, 27, 12, 10, 10, 10, time.UTC).Unix())
 	value := 2.75231
 	head := NewHead()
 	head.Append(labelsLong, timestamp, value)
 
 	if memS := head.GetMemSeries(labelsLong); memS == nil {
-		t.Errorf("memSeries wasn't correctly added to the head")
+		t.Errorf("memSeries is nil after head.Append")
 	} else {
-		if len(memS.Bytes()) <= 2 {
+		if len(memS.headChunkBytes()) <= 2 {
 			t.Errorf("No samples were appended")
 		}
 	}
 }
 
 func Test_head_getMemSeries(t *testing.T) {
-	labelsLong = labels.Labels{
-		labels.Label{Value: "prometheus_build_info", Name: "__name__"},
-		labels.Label{Value: "release-2.54", Name: "branch"},
-		labels.Label{Value: "amd64", Name: "goarch"},
-		labels.Label{Value: "linux", Name: "goos"},
-		labels.Label{Value: "go1.23.4", Name: "goversion"},
-		labels.Label{Value: "c5e015d29534f06bd1d238c64a06b7ac41abdd7f", Name: "revision"},
-		labels.Label{Value: "netgo,builtinassets,stringlabels", Name: "tags"},
-		labels.Label{Value: "2.54.1", Name: "version"},
-	}
-
 	head := NewHead()
 	memSeries := head.GetMemSeries(labelsLong)
 
 	if memSeries != nil {
-		t.Errorf("Should have returned a nil pointer")
+		t.Errorf("Memseries was returned for labels which shouldn't belong to any")
 	}
 
-	timestamp := uint64(time.Date(2025, time.April, 27, 12, 10, 10, 10, time.UTC).Unix())
 	value := 2.75231
 
-	head.Append(labelsLong, timestamp, value)
-	head.Append(labelsLong, timestamp, value)
-	head.Append(labelsLong, timestamp, value)
+	for _ = range 3 {
+		head.Append(labelsLong, timestamp, value)
+	}
 
 	head.Append(labelsLong, timestamp+3, value+1)
 	head.Append(labelsLong, timestamp+30, value+2)
@@ -83,5 +70,32 @@ func Test_head_getMemSeries(t *testing.T) {
 		if expectedTimestamps[i] != v.timestamp {
 			t.Errorf("Sample didn't contain expected timestamp: expected %v, actual %v", expectedTimestamps[i], v.timestamp)
 		}
+	}
+}
+
+func Test_head_cutNewChunk(t *testing.T) {
+	head := NewHead()
+
+	value := 2.75231
+
+	for _ = range 121 {
+		head.Append(labelsLong, timestamp, value)
+	}
+
+	memSeries := head.GetMemSeries(labelsLong)
+	if memSeries == nil {
+		t.Errorf("Created series wasn't returned")
+	}
+
+	if memSeries.headChunk.previous == nil {
+		t.Errorf("No new chunk created")
+	}
+
+	for _ = range 121 {
+		head.Append(labelsLong, timestamp, value)
+	}
+
+	if memSeries.headChunk.chunksListLength() != 3 {
+		t.Errorf("Head chunks list should be equal to 3, instead it's: %d", memSeries.headChunk.chunksListLength())
 	}
 }

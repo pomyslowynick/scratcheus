@@ -120,6 +120,9 @@ func (x *xorAppender) writeVDelta(v float64) {
 func (x *xorAppender) Series() []byte {
 	return x.b.stream
 }
+func (x *xorAppender) SamplesNum() int {
+	return int((int16(x.b.stream[0]) << 8) + int16(x.b.stream[1]))
+}
 
 type xorReader struct {
 	stream bstream

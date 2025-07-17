@@ -4,26 +4,9 @@ import (
 	"github.com/pomyslowynick/scratcheus/labels"
 )
 
-type memSeries struct {
-	labels labels.Labels
-	app    xorAppender
-}
-
-func newMemSeries(l labels.Labels) memSeries {
-	return memSeries{
-		labels: l,
-		app:    NewAppender(),
-	}
-}
-
-func (m *memSeries) Append(t uint64, v float64) {
-	m.app.Append(t, v)
-}
-
 type Head struct {
 	lastSeriesRef uint64
 	series        map[uint64]*memSeries
-	headChunk     Chunk
 }
 
 func NewHead() Head {
@@ -74,14 +57,35 @@ func (h *Head) ReadMemSeries(l labels.Labels) Series {
 		panic("Should never happen")
 	}
 
-	if v, ok := h.series[id]; ok {
-		reader := NewXorReader(v.app.b)
+	if series, ok := h.series[id]; ok {
+		reader := NewXorReader(series.headChunk.Bytes())
 		return reader.readSeries()
 	} else {
 		return Series{}
 	}
 }
 
-func (m *memSeries) Bytes() []byte {
-	return m.app.Series()
+type memSeries struct {
+	labels    labels.Labels
+	headChunk *Chunk
+}
+
+func newMemSeries(l labels.Labels) memSeries {
+	return memSeries{
+		labels:    l,
+		headChunk: cutNewChunk(),
+	}
+}
+
+func (m *memSeries) Append(t uint64, v float64) {
+	if m.headChunk.SamplesNum() >= 120 {
+		previous := m.headChunk
+		m.headChunk = cutNewChunk()
+		m.headChunk.previous = previous
+	}
+	m.headChunk.Append(t, v)
+}
+
+func (m *memSeries) headChunkBytes() []byte {
+	return m.headChunk.app.Series()
 }
